@@ -68,8 +68,8 @@ if prompt := st.chat_input("Hello! How can I assist you today?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        output = api_call("post", f"{config.API_URL}/chat", json={"provider": st.session_state.provider, "models_name": st.session_state.model_name, "messages": st.session_state.messages})
+        output = api_call("post", f"{config.API_URL}/rag", json={"query": prompt})
         response_data = output[1]
-        answer = response_data["message"]
+        answer = response_data["answer"]
         st.write(answer)
     st.session_state.messages.append({"role": "assistant", "content": answer})
