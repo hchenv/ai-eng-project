@@ -49,10 +49,8 @@ FastAPI documentation: http://localhost:8000/docs
 
 ## Contact
 
-If you have any questions, feel free to contact me via aurimas@swirlai.com
+If you have any questions, feel free to contact me via chenhang90@gmail.com
 
 You can also find me on:
 
-- 🔗 [LinkedIn](https://www.linkedin.com/in/aurimas-griciunas)
-- 🔗 [X](https://x.com/Aurimas_Gr)
-- 🔗 [Newsletter](https://www.newsletter.swirlai.com/)
+- 🔗 [LinkedIn](https://www.linkedin.com/in/hangchen1)
