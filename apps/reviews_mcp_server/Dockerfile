@@ -6,14 +6,13 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # Copy package files and source
-COPY apps/chatbot_ui ./apps/chatbot_ui
+COPY apps/reviews_mcp_server ./apps/reviews_mcp_server
 
 ENV UV_COMPILE_BYTECODE=1
-ENV UV_HTTP_TIMEOUT=120
 
 # Install dependencies including workspace packages
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --package chatbot_ui
+    uv sync --frozen --no-dev --package reviews_mcp_server
 
 # Enable bytecode compilation and Python optimization
 ENV PYTHONOPTIMIZE=1
@@ -22,29 +21,20 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 # Set PATH to use the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app/apps/chatbot_ui/src:$PYTHONPATH"
+ENV PYTHONPATH="/app/apps/reviews_mcp_server/src:$PYTHONPATH"
 
 # Create non-root user and set permissions
 RUN addgroup --system app && \
     adduser --system --ingroup app app && \
-    chown -R app:app /app && \
-    mkdir -p /home/app && \
-    chown -R app:app /home/app && \
-    mkdir -p /home/app/.streamlit && \
-    mkdir -p /home/app/.streamlit/data && \
-    mkdir -p /home/app/.streamlit/cache && \
-    chown -R app:app /home/app/.streamlit
-
-# Set home directory for the user
-ENV HOME=/home/app
+    chown -R app:app /app
 
 # Switch to non-root user
 USER app
 
-# Expose the Streamlit port
-EXPOSE 8501
+# Expose the FastAPI port
+EXPOSE 8000
 
-WORKDIR /app/apps/chatbot_ui/src
+WORKDIR /app/apps/reviews_mcp_server/src
 
 # Command to run the application
-CMD ["streamlit", "run", "chatbot_ui/app.py", "--server.address=0.0.0.0"]
+CMD ["python", "-m", "reviews_mcp_server.main"]
