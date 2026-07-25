@@ -1,11 +1,21 @@
 import streamlit as st
 import requests
 from chatbot_ui.core.config import config
-
+import uuid
+import json
 
 st.set_page_config(
     page_title="Ecommerce Assistant", layout="wide", initial_sidebar_state="expanded"
 )
+
+
+def get_session_id():
+    if "thread_id" not in st.session_state:
+        st.session_state.thread_id = str(uuid.uuid4())
+    return st.session_state.thread_id
+
+
+thread_id = get_session_id()
 
 
 def api_call(method, url, **kwargs):
@@ -41,6 +51,55 @@ def api_call(method, url, **kwargs):
         return False, {"message": str(e)}
 
 
+def api_call_stream(method, url, **kwargs):
+
+    def _show_error_popup(message):
+        """Show error message as a popup in the top-right corner."""
+        st.session_state["error_popup"] = {
+            "visible": True,
+            "message": message,
+        }
+
+    try:
+        response = getattr(requests, method)(url, **kwargs)
+
+        return response.iter_lines()
+
+    except requests.exceptions.ConnectionError:
+        _show_error_popup("Connection error. Please check your network connection.")
+        return False, {"message": "Connection error"}
+    except requests.exceptions.Timeout:
+        _show_error_popup("The request timed out. Please try again later.")
+        return False, {"message": "Request timeout"}
+    except Exception as e:
+        _show_error_popup(f"An unexpected error occurred: {str(e)}")
+        return False, {"message": str(e)}
+
+
+def submit_feedback(feedback_type=None, feedback_text=""):
+    """Submit feedback to the API endpoint"""
+
+    def _feedback_score(feedback_type):
+        if feedback_type == "positive":
+            return 1
+        elif feedback_type == "negative":
+            return 0
+        else:
+            return None
+
+    feedback_data = {
+        "feedback_score": _feedback_score(feedback_type),
+        "feedback_text": feedback_text,
+        "trace_id": st.session_state.trace_id,
+        "feedback_source_type": "api",
+    }
+
+    status, response = api_call(
+        "post", f"{config.API_URL}/submit_feedback/", json=feedback_data
+    )
+    return status, response
+
+
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "assistant", "content": "Hello! How can I assist you today?"}
@@ -49,10 +108,99 @@ if "messages" not in st.session_state:
 if "used_context" not in st.session_state:
     st.session_state.used_context = []
 
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = thread_id
 
-for message in st.session_state.messages:
+if "trace_id" not in st.session_state:
+    st.session_state.trace_id = ""
+
+if "latest_feedback" not in st.session_state:
+    st.session_state.latest_feedback = None
+
+if "show_feedback_box" not in st.session_state:
+    st.session_state.show_feedback_box = False
+
+if "feedback_submission_status" not in st.session_state:
+    st.session_state.feedback_submission_status = None
+
+
+for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+
+        is_latest_assistant = (
+            message["role"] == "assistant"
+            and idx == len(st.session_state.messages) - 1
+            and idx > 0
+            and bool(st.session_state.trace_id)
+        )
+
+        if is_latest_assistant:
+            feedback_key = f"feedback_{len(st.session_state.messages)}"
+            feedback_result = st.feedback("thumbs", key=feedback_key)
+
+            if feedback_result is not None:
+                feedback_type = "positive" if feedback_result == 1 else "negative"
+
+                if st.session_state.latest_feedback != feedback_type:
+                    with st.spinner("Submitting feedback..."):
+                        status, _ = submit_feedback(feedback_type=feedback_type)
+
+                    if status:
+                        st.session_state.latest_feedback = feedback_type
+                        st.session_state.feedback_submission_status = "success"
+                        st.session_state.show_feedback_box = feedback_type == "negative"
+                    else:
+                        st.session_state.feedback_submission_status = "error"
+                    st.rerun()
+
+            if st.session_state.feedback_submission_status == "success":
+                if st.session_state.latest_feedback == "positive":
+                    st.success("Thank you for your positive feedback!")
+                elif (
+                    st.session_state.latest_feedback == "negative"
+                    and not st.session_state.show_feedback_box
+                ):
+                    st.success("Thank you for your feedback!")
+            elif st.session_state.feedback_submission_status == "error":
+                st.error("Failed to submit feedback. Please try again.")
+
+            if st.session_state.show_feedback_box:
+                st.markdown("**Want to tell us more? (Optional)**")
+                feedback_text = st.text_area(
+                    "Additional feedback",
+                    key=f"feedback_text_{len(st.session_state.messages)}",
+                    placeholder="Please describe what was wrong with this response...",
+                    height=100,
+                )
+
+                col_send, _, col_close = st.columns([3, 5, 2])
+                with col_send:
+                    if st.button(
+                        "Send Details",
+                        key=f"send_additional_{len(st.session_state.messages)}",
+                    ):
+                        if feedback_text.strip():
+                            with st.spinner("Submitting additional feedback..."):
+                                status, _ = submit_feedback(
+                                    feedback_text=feedback_text.strip()
+                                )
+                            if status:
+                                st.session_state.show_feedback_box = False
+                                st.success("Additional feedback submitted.")
+                            else:
+                                st.error("Failed to submit additional feedback.")
+                        else:
+                            st.warning("Please enter feedback before submitting.")
+                        st.rerun()
+
+                with col_close:
+                    if st.button(
+                        "Close",
+                        key=f"close_feedback_{len(st.session_state.messages)}",
+                    ):
+                        st.session_state.show_feedback_box = False
+                        st.rerun()
 
 
 with st.sidebar:
@@ -78,16 +226,44 @@ if prompt := st.chat_input("Hello! How can I assist you today?"):
 
     with st.chat_message("assistant"):
 
-        state, output = api_call(
-            "post", f"{config.API_URL}/agent", json={"query": prompt}
-        )
+        status_placeholder = st.empty()
+        message_placeholder = st.empty()
 
-        answer = output["answer"]
-        used_context = output["used_context"]
+        for line in api_call_stream(
+            "post",
+            f"{config.API_URL}/agent",
+            json={"query": prompt, "thread_id": thread_id},
+            stream=True,
+            headers={"Accept": "text/event-stream"},
+        ):
+            line_text = line.decode("utf-8")
+            if line_text.startswith("data: "):  # get the actual useful information
+                data = line_text[6:]
 
-        st.session_state.used_context = used_context
+                try:
+                    output = json.loads(data)
 
-        st.write(answer)
+                    if output["type"] == "final_answer":
+                        answer = output["data"]["answer"]
+                        # extract data from "data" key
+                        used_context = output["data"]["used_context"]
+                        trace_id = output["data"]["trace_id"]
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+                        st.session_state.used_context = used_context
+                        st.session_state.messages.append(
+                            {"role": "assistant", "content": answer}
+                        )
+                        st.session_state.trace_id = trace_id
+
+                        st.session_state.latest_feedback = None
+                        st.session_state.show_feedback_box = False
+                        st.session_state.feedback_submission_status = None
+
+                        status_placeholder.empty()
+                        message_placeholder.markdown(answer)
+                        break
+
+                except json.JSONDecodeError:
+                    status_placeholder.markdown(f"*{data}*")  # the state?
+
     st.rerun()

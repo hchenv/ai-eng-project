@@ -3,12 +3,12 @@ import instructor
 from langsmith import traceable, get_current_run_tree
 from pydantic import BaseModel, Field
 
-from langchain_core.messages import SystemMessage, convert_to_openai_messages
+from langchain_core.messages import SystemMessage, convert_to_openai_messages, AIMessage
 from langchain_openai import ChatOpenAI
 
 from api.agents.utils.prompt_management import prompt_template_config
 
-from api.agents.tools import get_formatted_item_context
+from api.agents.tools import get_formatted_item_context, get_formatted_reviews_context
 
 
 ### QnA Agent Response Model
@@ -22,6 +22,8 @@ class RAGUsedContext(BaseModel):
 
 
 class FinalResponse(BaseModel):
+    """Call this tool when the final answer is possible using available context."""
+
     answer: str = Field(description="Answer to the question")
     references: list[RAGUsedContext] = Field(
         description="List of items used to answer the question"
@@ -53,10 +55,11 @@ def agent_node(state) -> dict:
     prompt = template.render()
 
     llm = ChatOpenAI(
-        model="gpt-5.4-mini", reasoning_effort="none", use_responses_api=True
+        model="gpt-5.4-mini", reasoning_effort="low", use_responses_api=True
     )
     llm_with_tools = llm.bind_tools(
-        [get_formatted_item_context, FinalResponse], tool_choice="any"
+        [get_formatted_item_context, get_formatted_reviews_context, FinalResponse],
+        tool_choice="required",  # why not "any", "any" works with completion api(langchain convert to "required"),not sure any works with response api
     )
 
     response = llm_with_tools.invoke([SystemMessage(content=prompt), *state.messages])
@@ -81,6 +84,12 @@ def agent_node(state) -> dict:
                 final_answer = True
                 answer = tool_call.get("args").get("answer")
                 references.extend(tool_call.get("args").get("references"))
+
+                # Strip the tool_calls off the terminal turn so the message
+                # persisted in state is a plain assistant message. A raw
+                # tool_calls message (with no matching ToolMessage) is invalid
+                # as input to the Responses API when the thread is replayed.
+                response = AIMessage(content=answer)
 
     return {
         "messages": [response],
@@ -111,8 +120,9 @@ def intent_router_node(state) -> dict:
 
     conversation = []
 
-    for message in messages:
-        conversation.append(convert_to_openai_messages(message))
+    # for message in messages:
+    #     conversation.append(convert_to_openai_messages(message))
+    conversation.append(convert_to_openai_messages(messages[-1]))
 
     client = instructor.from_provider(
         "openai/gpt-5.4-mini", mode=instructor.Mode.RESPONSES_TOOLS
@@ -131,5 +141,12 @@ def intent_router_node(state) -> dict:
             "output_tokens": raw_response.usage.output_tokens,
             "total_tokens": raw_response.usage.total_tokens,
         }
+        trace_id = str(current_run.trace_id)
+    else:
+        trace_id = ""
 
-    return {"question_relevant": response.question_relevant, "answer": response.answer}
+    return {
+        "question_relevant": response.question_relevant,
+        "answer": response.answer,
+        "trace_id": trace_id,
+    }

@@ -214,3 +214,5 @@ data/**
 
 # Qdrant local storage
 qdrant_data/
+data/
+postgres_data/

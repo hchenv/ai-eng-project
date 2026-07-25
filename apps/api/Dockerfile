@@ -9,6 +9,7 @@ COPY pyproject.toml uv.lock ./
 COPY apps/api ./apps/api
 
 ENV UV_COMPILE_BYTECODE=1
+ENV UV_HTTP_TIMEOUT=120
 
 # Install dependencies including workspace packages
 RUN --mount=type=cache,target=/root/.cache/uv \
