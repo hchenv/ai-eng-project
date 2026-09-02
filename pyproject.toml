@@ -38,6 +38,7 @@ dev = [
     "langchain-openai>=1.1.9",
     "langgraph-checkpoint-postgres>=3.1.0",
     "langsmith[claude-agent-sdk]>=0.9.4",
+    "psycopg2-binary>=2.9.12",
     "psycopg[binary]>=3.3.4",
     "qdrant-client>=1.18.0",
     "ragas>=0.4.3",
