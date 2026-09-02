@@ -1,8 +1,24 @@
 from pydantic import BaseModel, Field
 from typing import Annotated, List, Any
 from operator import add
-from api.agents.agents import RAGUsedContext, agent_node, intent_router_node
-from api.agents.tools import get_formatted_item_context, get_formatted_reviews_context
+from api.agents.agents import (
+    RAGUsedContext,
+    product_qna_agent,
+    shopping_cart_agent,
+    warehouse_manager_agent,
+    coordinator_agent,
+    Delegation,
+)
+from api.agents.tools import (
+    get_formatted_item_context,
+    get_formatted_reviews_context,
+    get_shopping_cart,
+    get_shopping_cart_for_sse,
+    remove_from_cart,
+    add_to_shopping_cart,
+    check_warehouse_availability,
+    reserve_warehouse_items,
+)
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
@@ -12,22 +28,40 @@ from langgraph.checkpoint.postgres import PostgresSaver
 import json
 
 
+class AgentProperties(BaseModel):
+    iteration: int = 0
+    final_answer: bool = False
+
+
+class CoordinatorAgentProperties(BaseModel):
+    iteration: int = 0
+    final_answer: bool = False
+    plan: List[Delegation] = []
+    next_agent: str = ""
+
+
 class State(BaseModel):
     messages: Annotated[List[Any], add] = []
-    question_relevant: bool = False
-    iteration: int = 0
+    user_intent: str = ""
+    product_qna_agent: AgentProperties = AgentProperties()
+    shopping_cart_agent: AgentProperties = AgentProperties()
+    warehouse_manager_agent: AgentProperties = AgentProperties()
+    coordinator_agent: CoordinatorAgentProperties = CoordinatorAgentProperties()
     answer: str = ""
-    final_answer: bool = False
     references: list[RAGUsedContext] = []
+    user_id: str = ""
+    cart_id: str = ""
     trace_id: str = ""
 
 
-### functions that control the Edges
-def tool_router(state: State) -> str:
+### Edges
 
-    if state.final_answer:
+
+def product_qna_agent_tool_router(state) -> str:
+
+    if state.product_qna_agent.final_answer:
         return "end"
-    elif state.iteration > 2:
+    elif state.product_qna_agent.iteration > 5:
         return "end"
     elif len(state.messages[-1].tool_calls) > 0:
         return "tools"
@@ -35,10 +69,42 @@ def tool_router(state: State) -> str:
         return "end"
 
 
-def intent_router_conditional_edges(state: State) -> str:
+def shopping_cart_agent_tool_router(state) -> str:
 
-    if state.question_relevant:
-        return "agent_node"
+    if state.shopping_cart_agent.final_answer:
+        return "end"
+    elif state.shopping_cart_agent.iteration > 4:
+        return "end"
+    elif len(state.messages[-1].tool_calls) > 0:
+        return "tools"
+    else:
+        return "end"
+
+
+def warehouse_manager_agent_tool_router(state) -> str:
+
+    if state.warehouse_manager_agent.final_answer:
+        return "end"
+    elif state.warehouse_manager_agent.iteration > 4:
+        return "end"
+    elif len(state.messages[-1].tool_calls) > 0:
+        return "tools"
+    else:
+        return "end"
+
+
+def coordinator_agent_edge(state) -> str:
+
+    if state.coordinator_agent.final_answer:
+        return "end"
+    elif state.coordinator_agent.iteration > 6:
+        return "end"
+    elif state.coordinator_agent.next_agent == "product_qna_agent":
+        return "product_qna_agent"
+    elif state.coordinator_agent.next_agent == "shopping_cart_agent":
+        return "shopping_cart_agent"
+    elif state.coordinator_agent.next_agent == "warehouse_manager_agent":
+        return "warehouse_manager_agent"
     else:
         return "end"
 
@@ -47,68 +113,70 @@ def intent_router_conditional_edges(state: State) -> str:
 
 workflow = StateGraph(State)
 
-tools = [get_formatted_item_context, get_formatted_reviews_context]
-tool_node = ToolNode(tools)
+product_qna_agent_tools = [get_formatted_item_context, get_formatted_reviews_context]
+product_qna_agent_tool_node = ToolNode(product_qna_agent_tools)
 
-workflow.add_node("tool_node", tool_node)
-workflow.add_node("agent_node", agent_node)
-workflow.add_node("intent_router_node", intent_router_node)
+shopping_cart_agent_tools = [get_shopping_cart, remove_from_cart, add_to_shopping_cart]
+shopping_cart_agent_tool_node = ToolNode(shopping_cart_agent_tools)
 
-workflow.add_edge(START, "intent_router_node")
+warehouse_manager_agent_tools = [check_warehouse_availability, reserve_warehouse_items]
+warehouse_manager_agent_tool_node = ToolNode(warehouse_manager_agent_tools)
+
+workflow.add_node("product_qna_agent_tool_node", product_qna_agent_tool_node)
+workflow.add_node("shopping_cart_agent_tool_node", shopping_cart_agent_tool_node)
+workflow.add_node(
+    "warehouse_manager_agent_tool_node", warehouse_manager_agent_tool_node
+)
+workflow.add_node("product_qna_agent", product_qna_agent)
+workflow.add_node("shopping_cart_agent", shopping_cart_agent)
+workflow.add_node("warehouse_manager_agent", warehouse_manager_agent)
+workflow.add_node("coordinator_agent", coordinator_agent)
+
+workflow.add_edge(START, "coordinator_agent")
 
 workflow.add_conditional_edges(
-    "intent_router_node",
-    intent_router_conditional_edges,
-    {"agent_node": "agent_node", "end": END},
+    "coordinator_agent",
+    coordinator_agent_edge,
+    {
+        "product_qna_agent": "product_qna_agent",
+        "shopping_cart_agent": "shopping_cart_agent",
+        "warehouse_manager_agent": "warehouse_manager_agent",
+        "end": END,
+    },
 )
 
 workflow.add_conditional_edges(
-    "agent_node", tool_router, {"tools": "tool_node", "end": END}
+    "product_qna_agent",
+    product_qna_agent_tool_router,
+    {"tools": "product_qna_agent_tool_node", "end": "coordinator_agent"},
 )
 
-workflow.add_edge("tool_node", "agent_node")
+workflow.add_conditional_edges(
+    "shopping_cart_agent",
+    shopping_cart_agent_tool_router,
+    {"tools": "shopping_cart_agent_tool_node", "end": "coordinator_agent"},
+)
 
-graph = workflow.compile()
+workflow.add_conditional_edges(
+    "warehouse_manager_agent",
+    warehouse_manager_agent_tool_router,
+    {"tools": "warehouse_manager_agent_tool_node", "end": "coordinator_agent"},
+)
+
+workflow.add_edge("product_qna_agent_tool_node", "product_qna_agent")
+workflow.add_edge("shopping_cart_agent_tool_node", "shopping_cart_agent")
+workflow.add_edge("warehouse_manager_agent_tool_node", "warehouse_manager_agent")
 
 
 ### Agent Execution
-def run_agent(question: str) -> dict:
-
-    initial_state = {
-        "messages": [HumanMessage(content=question)],
-        "iteration": 0,
-    }
-
-    result = graph.invoke(initial_state)
-
-    return result
 
 
 def agent_stream_wrapper(question: str, thread_id: str) -> dict:
-    # entire runction is a generator that yields a string for each event
-    # get result and extract addtional data from qdrant database
 
     def _string_for_sse(string):
         return f"data: {string}\n\n"
 
     def _process_graph_event(chunk):
-        """Convert a LangGraph stream event into a user-facing progress message.
-
-        The function expects an event emitted by ``graph.stream`` when using
-        ``stream_mode=["updates", "tasks"]``. A chunk is a ``(mode, event)``
-        tuple. Only task-start events are handled; update and task-result events
-        are ignored.
-
-        Progress messages are printed for the intent router, agent, and tool
-        nodes. Tool calls are translated into short descriptions of the work
-        being performed.
-
-        Args:
-            chunk: A ``(stream_mode, event_data)`` tuple yielded by LangGraph.
-
-        Returns:
-            None. Progress information is written to standard output.
-        """
 
         def _is_node_start(chunk):
             return chunk[1].get("type") == "task"
@@ -118,13 +186,27 @@ def agent_stream_wrapper(question: str, thread_id: str) -> dict:
                 return f"Looking for items: {tool_call.get('args').get('query', '')}."
             elif tool_call.get("name") == "get_formatted_reviews_context":
                 return f"Fetching user reviews..."
+            elif tool_call.get("name") == "get_shopping_cart":
+                return "Fetching shopping cart..."
+            elif tool_call.get("name") == "remove_from_cart":
+                return "Removing items from shopping cart..."
+            elif tool_call.get("name") == "add_to_shopping_cart":
+                return "Adding items to shopping cart..."
+            elif tool_call.get("name") == "check_warehouse_availability":
+                return "Checking warehouse availability..."
+            elif tool_call.get("name") == "reserve_warehouse_items":
+                return "Reserving warehouse items..."
 
         if _is_node_start(chunk):
-            if chunk[1].get("payload", {}).get("name") == "intent_router_node":
+            if chunk[1].get("payload", {}).get("name") == "coordinator_agent":
                 return "Analysing the question..."
-            if chunk[1].get("payload", {}).get("name") == "agent_node":
+            if chunk[1].get("payload", {}).get("name") == "product_qna_agent":
                 return "Planning..."
-            if chunk[1].get("payload", {}).get("name") == "tool_node":
+            if chunk[1].get("payload", {}).get("name") == "shopping_cart_agent":
+                return "Planning..."
+            if chunk[1].get("payload", {}).get("name") == "warehouse_manager_agent":
+                return "Planning..."
+            if chunk[1].get("payload", {}).get("name", "").endswith("tool_node"):
                 message = " ".join(
                     [
                         _tool_to_text(tool_call)
@@ -141,27 +223,37 @@ def agent_stream_wrapper(question: str, thread_id: str) -> dict:
 
     initial_state = {
         "messages": [HumanMessage(content=question)],
-        "iteration": 0,
+        "user_id": thread_id,
+        "cart_id": thread_id,
+        "coordinator_agent": {
+            "iteration": 0,
+            "final_answer": False,
+            "plan": [],
+            "next_agent": "",
+        },
+        "product_qna_agent": {"iteration": 0, "final_answer": False},
+        "shopping_cart_agent": {"iteration": 0, "final_answer": False},
+        "warehouse_manager_agent": {"iteration": 0, "final_answer": False},
     }
-    config = {"configurable": {"thread_id": thread_id}}  # random id
+    config = {"configurable": {"thread_id": thread_id}}
 
     with PostgresSaver.from_conn_string(
-        "postgresql://langgraph_user:langgraph_password@postgres:5432/langgraph_db"  # changed to service account instead of local
+        "postgresql://langgraph_user:langgraph_password@postgres:5432/langgraph_db"
     ) as checkpointer:
 
         graph = workflow.compile(checkpointer=checkpointer)
 
-        result = {}
-        for event in graph.stream(
-            initial_state, config, stream_mode=["debug", "values"]
-        ):  # stream return a generator
-            processed_chunk = _process_graph_event(event)
+        for chunk in graph.stream(
+            initial_state, config=config, stream_mode=["debug", "values"]
+        ):
+
+            processed_chunk = _process_graph_event(chunk)
+
             if processed_chunk:
                 yield _string_for_sse(processed_chunk)
-            if event[0] == "values":
-                result = event[1]
 
-    # result = run_agent(question)
+            if chunk[0] == "values":
+                result = chunk[1]
 
     used_context = []
 
@@ -189,7 +281,20 @@ def agent_stream_wrapper(question: str, thread_id: str) -> dict:
                 }
             )
 
-    # convert the result to a string and yield it with sse format
+    shopping_cart = get_shopping_cart_for_sse(user_id=thread_id, cart_id=thread_id)
+    shopping_cart_items = [
+        {
+            "price": float(item.get("price")) if item.get("price") else None,
+            "quantity": item.get("quantity"),
+            "currency": item.get("currency"),
+            "product_image_url": item.get("product_image_url"),
+            "total_price": (
+                float(item.get("total_price")) if item.get("total_price") else None
+            ),
+        }
+        for item in shopping_cart
+    ]
+
     yield _string_for_sse(
         json.dumps(
             {
@@ -198,6 +303,7 @@ def agent_stream_wrapper(question: str, thread_id: str) -> dict:
                     "answer": result.get("answer", ""),
                     "used_context": used_context,
                     "trace_id": result.get("trace_id", ""),
+                    "shopping_cart": shopping_cart_items,
                 },
             }
         )
