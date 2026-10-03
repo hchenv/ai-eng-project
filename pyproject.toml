@@ -28,16 +28,20 @@ members = [
 
 [dependency-groups]
 dev = [
+    "a2a-sdk>=1.1.2",
     "cohere>=7.0.5",
     "fastmcp>=3.4.0",
+    "google-adk>=2.9.0",
     "instructor>=1.15.4",
     "ipykernel>=7.1.0",
     "langchain-community>=0.4.0,<0.4.2",
     "langchain-google-vertexai>=3.2.4",
+    "langchain-litellm>=0.7.1",
     "langchain-mcp-adapters>=0.3.0",
     "langchain-openai>=1.1.9",
     "langgraph-checkpoint-postgres>=3.1.0",
     "langsmith[claude-agent-sdk]>=0.9.4",
+    "litellm>=1.100.1",
     "psycopg2-binary>=2.9.12",
     "psycopg[binary]>=3.3.4",
     "qdrant-client>=1.18.0",

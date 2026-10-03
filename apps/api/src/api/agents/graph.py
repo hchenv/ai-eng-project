@@ -7,7 +7,6 @@ from api.agents.agents import (
     shopping_cart_agent,
     warehouse_manager_agent,
     coordinator_agent,
-    Delegation,
 )
 from api.agents.tools import (
     get_formatted_item_context,
@@ -36,7 +35,7 @@ class AgentProperties(BaseModel):
 class CoordinatorAgentProperties(BaseModel):
     iteration: int = 0
     final_answer: bool = False
-    plan: List[Delegation] = []
+    # plan: List[Delegation] = []
     next_agent: str = ""
 
 
@@ -228,7 +227,7 @@ def agent_stream_wrapper(question: str, thread_id: str) -> dict:
         "coordinator_agent": {
             "iteration": 0,
             "final_answer": False,
-            "plan": [],
+            # "plan": [],
             "next_agent": "",
         },
         "product_qna_agent": {"iteration": 0, "final_answer": False},
