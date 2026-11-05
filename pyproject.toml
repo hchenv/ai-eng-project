@@ -32,6 +32,7 @@ dev = [
     "cohere>=7.0.5",
     "fastmcp>=3.4.0",
     "google-adk>=2.9.0",
+    "guardrails-ai>=0.11.0",
     "instructor>=1.15.4",
     "ipykernel>=7.1.0",
     "langchain-community>=0.4.0,<0.4.2",

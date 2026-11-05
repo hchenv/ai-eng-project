@@ -216,3 +216,5 @@ data/**
 qdrant_data/
 data/
 postgres_data/
+
+.DS_Store

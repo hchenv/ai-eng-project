@@ -2,7 +2,7 @@ from google.adk.agents import Agent
 from google.adk.models.lite_llm import LiteLlm
 import os
 
-from apps.adk_warehouse_manager_agent.warehouse_manager_agent.tools import (
+from .tools import (
     check_warehouse_availability,
     reserve_warehouse_items,
 )

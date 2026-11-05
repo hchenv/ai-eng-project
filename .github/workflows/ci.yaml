@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-evaluations:
+    runs-on: ubuntu-latest
+    name: Eval Quality Gate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run evaluations
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          QDRANT_CLOUD_URL: ${{ secrets.QDRANT_CLOUD_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          LANGGRAPH_DB_URL: ${{ secrets.LANGGRAPH_DB_URL }}
+          TOOLS_DB_URL: ${{ secrets.TOOLS_DB_URL }}
+          PYTHONPATH: ${{ github.workspace }}/apps/api/src:${{ github.workspace }}/apps/api
+        run: |
+          cd apps/api/src
+          uv run python -m evals.eval_coordinator_agent
