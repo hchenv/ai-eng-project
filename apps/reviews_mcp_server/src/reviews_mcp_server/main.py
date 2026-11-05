@@ -5,7 +5,7 @@ from reviews_mcp_server.utils import (
     process_reviews_context,
 )
 
-mcp = FastMCP("items_mcp_server")
+mcp = FastMCP("reviews_mcp_server")
 
 
 @mcp.tool

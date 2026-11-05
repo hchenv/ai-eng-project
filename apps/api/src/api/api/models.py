@@ -1,4 +1,3 @@
-from concurrent.futures import thread
 from pydantic import BaseModel, Field
 from typing import Literal, Optional, Union
 
@@ -12,6 +11,12 @@ class RAGUsedContext(BaseModel):
     image_url: str
     description: str
     price: Optional[float] = None  # sometimes the price is not available
+
+
+class HitlRequest(BaseModel):
+    thread_id: str
+    approved: bool
+    feedback: str = ""
 
 
 class AgentResponse(BaseModel):
