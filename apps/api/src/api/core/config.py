@@ -4,7 +4,7 @@ class Config(BaseSettings):
     OPENAI_API_KEY: str
     GROQ_API_KEY: str
     GOOGLE_API_KEY: str
-    QDRANT_CLOUD_URL: str
+    QDRANT_URL: str
     QDRANT_API_KEY: str
     LANGGRAPH_DB_URL: str
     TOOLS_DB_URL: str

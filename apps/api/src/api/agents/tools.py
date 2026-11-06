@@ -23,7 +23,7 @@ from api.core.config import config
 
 def get_qdrant_client():
     return QdrantClient(
-        url=config.QDRANT_CLOUD_URL,
+        url=config.QDRANT_URL,
         api_key=config.QDRANT_API_KEY,
         timeout=60,
     )

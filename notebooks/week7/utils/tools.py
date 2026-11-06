@@ -14,7 +14,7 @@ import numpy as np
 
 def get_qdrant_client():
     return QdrantClient(
-        url=os.environ["QDRANT_CLOUD_URL"],
+        url=os.environ["QDRANT_URL"],
         api_key=os.environ["QDRANT_API_KEY"],
         timeout=60,
     )
