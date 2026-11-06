@@ -28,7 +28,7 @@ def create_task_definition():
         "LANGSMITH_API_KEY": "langsmith-api-key",
         "GROQ_API_KEY": "groq-api-key",
         "GOOGLE_API_KEY": "google-api-key",
-        "QDRANT_CLOUD_URL": "qdrant-url",
+        "QDRANT_URL": "qdrant-url",
         "QDRANT_API_KEY": "qdrant-api-key",
         "LANGGRAPH_DB_URL": "langgraph-db-url",
         "TOOLS_DB_URL": "tools-db-url",

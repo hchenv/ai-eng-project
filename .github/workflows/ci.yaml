@@ -35,7 +35,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          QDRANT_CLOUD_URL: ${{ secrets.QDRANT_CLOUD_URL }}
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
           LANGGRAPH_DB_URL: ${{ secrets.LANGGRAPH_DB_URL }}
           TOOLS_DB_URL: ${{ secrets.TOOLS_DB_URL }}
