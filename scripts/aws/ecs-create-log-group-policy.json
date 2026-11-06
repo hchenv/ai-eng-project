@@ -4,7 +4,7 @@
         {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
-            "Resource": "arn:aws:logs:eu-central-1:623924715578:log-group:/ecs/*"
+            "Resource": "arn:aws:logs:ap-southeast-1:776364313491:log-group:/ecs/*"
         }
     ]
 }

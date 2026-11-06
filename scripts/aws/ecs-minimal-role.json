@@ -17,10 +17,15 @@
             "Effect": "Allow",
             "Action": "iam:PassRole",
             "Resource": [
-                "arn:aws:iam::623924715578:role/amazon-be-task-role",
-                "arn:aws:iam::623924715578:role/amazon-fe-task-role",
-                "arn:aws:iam::623924715578:role/ecsTaskExecutionRole"
+                "arn:aws:iam::776364313491:role/amazon-be-task-role",
+                "arn:aws:iam::776364313491:role/amazon-fe-task-role",
+                "arn:aws:iam::776364313491:role/ecsTaskExecutionRole"
             ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": "secretsmanager:DescribeSecret",
+            "Resource": "arn:aws:secretsmanager:ap-southeast-1:776364313491:secret:shopping-assistant/*"
         }
     ]
 }
