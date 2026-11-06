@@ -27,7 +27,6 @@ def create_task_definition():
         "OPENAI_API_KEY": "openai-api-key",
         "LANGSMITH_API_KEY": "langsmith-api-key",
         "GROQ_API_KEY": "groq-api-key",
-        "GOOGLE_API_KEY": "google-api-key",
         "QDRANT_URL": "qdrant-url",
         "QDRANT_API_KEY": "qdrant-api-key",
         "LANGGRAPH_DB_URL": "langgraph-db-url",
