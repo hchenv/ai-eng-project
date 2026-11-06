@@ -106,4 +106,5 @@ jobs:
       - name: Run ${{ matrix.service.name }} task definition script
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT }}
+          API_URL: ${{ vars.API_URL }}
         run: python ${{ matrix.service.script }}
