@@ -9,9 +9,21 @@
                 "ecs:DeregisterTaskDefinition",
                 "ecs:TagResource",
                 "ecs:UntagResource",
-                "ecs:ListTagsForResource"
+                "ecs:ListTagsForResource",
+                "ecs:ListTaskDefinitions"
             ],
             "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecs:UpdateService",
+                "ecs:DescribeServices"
+            ],
+            "Resource": [
+                "arn:aws:ecs:ap-southeast-1:776364313491:service/shopping-assistant-cluster/amazon-be-service",
+                "arn:aws:ecs:ap-southeast-1:776364313491:service/shopping-assistant-cluster/amazon-fe-service"
+            ]
         },
         {
             "Effect": "Allow",

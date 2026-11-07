@@ -36,11 +36,14 @@ Pushes to `main` run `.github/workflows/build.yaml`, which:
 
 1. Authenticates to AWS through GitHub OIDC.
 2. Builds the frontend and backend container images.
-3. Pushes commit-tagged and `latest` images to Amazon ECR.
-4. Registers new ECS task-definition revisions.
+3. Pushes commit, release, and `latest` image tags to Amazon ECR.
+4. Registers release-tagged ECS task-definition revisions.
 
-The workflow currently registers revisions but does not automatically update
-the running ECS services. Service deployment is still a manual step.
+Releases use `release-YYYYMMDD-<short-sha>`, for example
+`release-20261107-a1b2c3d4`. To deploy one, run **Deploy ECS release** from the
+GitHub Actions page, enter its release name, and choose the backend, frontend,
+or both services. The workflow updates the selected ECS services and waits for
+them to become stable.
 
 ## Deployed services
 

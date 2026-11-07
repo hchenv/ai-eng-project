@@ -18,9 +18,12 @@ def get_secret_reference(
 
 def create_task_definition():
     commit_sha = os.environ.get("GITHUB_SHA", "unknown")[:8]
+    release_version = os.environ.get("RELEASE_VERSION")
     aws_account_id = os.environ.get("AWS_ACCOUNT_ID")
     if not aws_account_id:
         raise RuntimeError("AWS_ACCOUNT_ID is required")
+    if not release_version:
+        raise RuntimeError("RELEASE_VERSION is required")
 
     secrets_client = boto3.client("secretsmanager", region_name=AWS_REGION)
     secret_names = {
@@ -46,7 +49,7 @@ def create_task_definition():
                 "name": "api",
                 "image": (
                     f"{aws_account_id}.dkr.ecr.{AWS_REGION}.amazonaws.com/"
-                    f"amazon-be:{commit_sha}"
+                    f"amazon-be:{release_version}"
                 ),
                 "cpu": 0,
                 "portMappings": [
@@ -102,6 +105,7 @@ def create_task_definition():
         },
         "enableFaultInjection": False,
         "tags": [
+            {"key": "Release", "value": release_version},
             {"key": "CommitSHA", "value": commit_sha},
             {"key": "ManagedBy", "value": "GitHub-Actions"},
         ],
@@ -113,6 +117,7 @@ def create_task_definition():
     print("Task definition registered successfully")
     print(f"Task Definition ARN: {response['taskDefinition']['taskDefinitionArn']}")
     print(f"Revision: {response['taskDefinition']['revision']}")
+    print(f"Release: {release_version}")
     print(f"Commit SHA: {commit_sha}")
     return response
 

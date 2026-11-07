@@ -54,6 +54,7 @@ flowchart TB
     ECRRole -->|"push images"| ECR["Amazon ECR<br/>amazon-be and amazon-fe"]
     DefinitionRole -->|"DescribeSecret"| Secrets["AWS Secrets Manager<br/>shopping-assistant/*"]
     DefinitionRole -->|"register revision"| Definitions["ECS task definitions"]
+    DefinitionRole -->|"deploy selected release"| Services["ECS services<br/>amazon-be-service and amazon-fe-service"]
     DefinitionRole -. "iam:PassRole" .-> ExecutionRole["ecsTaskExecutionRole"]
     DefinitionRole -. "iam:PassRole" .-> TaskRoles["amazon-be-task-role<br/>amazon-fe-task-role"]
 
@@ -70,8 +71,8 @@ flowchart TB
 - **`github-actions-ecr-role`** is assumed by GitHub Actions through OIDC. It
   can upload images to ECR but cannot register ECS task definitions.
 - **`github-task-definition-role`** is also assumed through GitHub OIDC. It
-  registers task-definition revisions, resolves secret ARNs, and passes the
-  runtime roles to ECS.
+  registers task-definition revisions, resolves secret ARNs, deploys selected
+  releases to ECS services, and passes the runtime roles to ECS.
 - **`ecsTaskExecutionRole`** is assumed by the ECS agent. It pulls images,
   retrieves secret values before container startup, creates log groups, and
   sends container logs to CloudWatch.
@@ -96,23 +97,24 @@ environment variables.
 
 ## Current deployment lifecycle
 
-The GitHub Actions workflow:
+The build workflow:
 
 1. Builds the frontend and backend images.
-2. Pushes commit-tagged and `latest` images to ECR.
-3. Registers new frontend and backend task-definition revisions.
+2. Creates an immutable `release-YYYYMMDD-<short-sha>` identifier.
+3. Pushes commit, release, and `latest` image tags to ECR.
+4. Registers release-tagged frontend and backend task-definition revisions.
 
-It does **not** currently update the ECS services to use newly registered
-revisions. After a future build, update each service manually or add
-`aws ecs update-service` steps to `.github/workflows/build.yaml`.
+The separate **Deploy ECS release** workflow is started manually from GitHub
+Actions. It resolves task definitions by release tag, updates the selected ECS
+services, waits for them to become stable, and records the production
+deployment in the GitHub environment history.
 
 ## Recommended improvements
 
 1. Add an ACM certificate and HTTPS listener. The current endpoint is HTTP
    only.
-2. Extend CI/CD to deploy new task-definition revisions to both ECS services.
-3. Add application/container health checks, especially for the backend.
-4. Remove Uvicorn `--reload` from the production backend container.
-5. Set CloudWatch Logs retention and enable ECR image scanning.
-6. Run at least two tasks per service if high availability is required.
+2. Add application/container health checks, especially for the backend.
+3. Remove Uvicorn `--reload` from the production backend container.
+4. Set CloudWatch Logs retention and enable ECR image scanning.
+5. Run at least two tasks per service if high availability is required.
 
