@@ -3,7 +3,7 @@ import logging
 from langsmith import traceable, get_current_run_tree
 from pydantic import BaseModel, Field
 
-from langchain_core.messages import SystemMessage, AIMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_litellm import ChatLiteLLM
 
 from api.agents.utils.prompt_management import prompt_template_config
@@ -304,6 +304,28 @@ def coordinator_agent(state, models=DEFAULT_MODELS) -> dict:
     response, model = _invoke_with_fallback(
         models, prompts, tools, state.messages
     )
+
+    if not response.tool_calls:
+        logger.warning(
+            "Coordinator returned no tool call; retrying with an explicit instruction"
+        )
+        response, model = _invoke_with_fallback(
+            models,
+            prompts,
+            tools,
+            [
+                *state.messages,
+                response,
+                HumanMessage(
+                    content=(
+                        "Your previous response did not call a tool. Call exactly one "
+                        "of the available tools now. Use Plan to delegate work or "
+                        "FinalAgentResponse to answer the user."
+                    )
+                ),
+            ],
+        )
+
     trace_id = _record_usage(response, model)
 
     final_answer = False
@@ -326,8 +348,12 @@ def coordinator_agent(state, models=DEFAULT_MODELS) -> dict:
             final_answer = postprocessed_response.get("final_answer")
             answer = postprocessed_response.get("answer")
             response = postprocessed_response.get("response")
+    else:
+        final_answer = True
+        answer = state.answer or "I could not route this request. Please try again."
+        response = AIMessage(content=answer)
 
-    return {
+    result = {
         "messages": [response] if response else [],
         "coordinator_agent": {
             "iteration": state.coordinator_agent.iteration + 1,
@@ -335,6 +361,9 @@ def coordinator_agent(state, models=DEFAULT_MODELS) -> dict:
             "next_agent": next_agent,
             "next_agent_task": next_agent_task,
         },
-        "answer": answer,
         "trace_id": trace_id,
     }
+    if answer:
+        result["answer"] = answer
+
+    return result
