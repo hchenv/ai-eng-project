@@ -45,7 +45,19 @@ Streamlit application: http://localhost:8501
 
 FastAPI documentation: http://localhost:8000/docs
 
+## Production deployment
 
+The production application runs on AWS ECS with Fargate. An Application Load
+Balancer exposes the Streamlit frontend, while ECS Service Connect routes
+frontend requests to the private FastAPI backend. GitHub Actions builds the
+container images, pushes them to Amazon ECR, and registers ECS task-definition
+revisions using AWS OIDC roles.
+
+Deployed frontend:
+<http://shopping-assistant-fe-alb-1860229733.ap-southeast-1.elb.amazonaws.com/>
+
+See the [AWS deployment architecture](docs/aws-architecture.md) for diagrams,
+IAM role explanations, networking details, and deployment limitations.
 
 ## Contact
 
