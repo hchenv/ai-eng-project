@@ -1,0 +1,145 @@
+name: Deploy ECS release
+run-name: Deploy ${{ inputs.release_version }} (${{ inputs.service }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Release to deploy, for example release-20261107-a1b2c3d4
+        required: true
+        type: string
+      service:
+        description: Service to deploy
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - backend
+          - frontend
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+  AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/github-task-definition-role
+  ECS_CLUSTER: shopping-assistant-cluster
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validate release version
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^release-[0-9]{8}-[0-9a-f]{8}$ ]]; then
+            echo "Invalid release version: $RELEASE_VERSION"
+            echo "Expected format: release-YYYYMMDD-a1b2c3d4"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-session-name: GitHubActionsDeploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve backend task definition
+        id: backend
+        if: inputs.service == 'all' || inputs.service == 'backend'
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          TASK_DEFINITION=""
+          for ARN in $(aws ecs list-task-definitions \
+            --family-prefix amazon-be \
+            --status ACTIVE \
+            --sort DESC \
+            --query 'taskDefinitionArns' \
+            --output text); do
+            RELEASE_TAG=$(aws ecs list-tags-for-resource \
+              --resource-arn "$ARN" \
+              --query "tags[?key=='Release'] | [0].value" \
+              --output text)
+            if [[ "$RELEASE_TAG" == "$RELEASE_VERSION" ]]; then
+              TASK_DEFINITION="$ARN"
+              break
+            fi
+          done
+          if [[ -z "$TASK_DEFINITION" ]]; then
+            echo "No backend task definition found for $RELEASE_VERSION"
+            exit 1
+          fi
+          echo "task_definition=$TASK_DEFINITION" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy backend
+        if: inputs.service == 'all' || inputs.service == 'backend'
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service amazon-be-service \
+            --task-definition "${{ steps.backend.outputs.task_definition }}" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services amazon-be-service
+
+      - name: Resolve frontend task definition
+        id: frontend
+        if: inputs.service == 'all' || inputs.service == 'frontend'
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          TASK_DEFINITION=""
+          for ARN in $(aws ecs list-task-definitions \
+            --family-prefix amazon-fe \
+            --status ACTIVE \
+            --sort DESC \
+            --query 'taskDefinitionArns' \
+            --output text); do
+            RELEASE_TAG=$(aws ecs list-tags-for-resource \
+              --resource-arn "$ARN" \
+              --query "tags[?key=='Release'] | [0].value" \
+              --output text)
+            if [[ "$RELEASE_TAG" == "$RELEASE_VERSION" ]]; then
+              TASK_DEFINITION="$ARN"
+              break
+            fi
+          done
+          if [[ -z "$TASK_DEFINITION" ]]; then
+            echo "No frontend task definition found for $RELEASE_VERSION"
+            exit 1
+          fi
+          echo "task_definition=$TASK_DEFINITION" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy frontend
+        if: inputs.service == 'all' || inputs.service == 'frontend'
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service amazon-fe-service \
+            --task-definition "${{ steps.frontend.outputs.task_definition }}" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services amazon-fe-service
+
+      - name: Record deployment
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          SERVICE: ${{ inputs.service }}
+        run: |
+          echo "### Production deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release: \`$RELEASE_VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Service: \`$SERVICE\`" >> "$GITHUB_STEP_SUMMARY"
