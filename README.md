@@ -1,56 +1,58 @@
-# ai-engineering-bootcamp-prerequisites
+# AI shopping assistant
 
-Welcome to the prerequisites repository for the [End-to-End AI Engineering Bootcamp](https://maven.com/swirl-ai/end-to-end-ai-engineering)! This repository is dedicated to setting up your development environment and scafoling a simple project with a StreamLit UI frontend service decoupled from FastAPI server.
+Production deployment of a Streamlit shopping assistant backed by FastAPI,
+Qdrant, PostgreSQL, and LLM APIs.
 
-We strongly recomend you coding along the videos available in our YouTube channel rather than just cloning the repository and running the code.
+## Live deployment
 
----
+Frontend:
+<http://shopping-assistant-fe-alb-1860229733.ap-southeast-1.elb.amazonaws.com/>
 
-[Video 1](https://youtu.be/3WsEgLtwsGs): Setting up your development environment
+> The current load balancer endpoint uses HTTP. HTTPS is a recommended next
+> step before treating this as a public production service.
 
-[Video 2](https://youtu.be/cGOGA7GFecI): Build and containerise your first chatbot
+## Production architecture
 
-[Video 3](https://youtu.be/bZHaCAFAUCs): Moving the agent behind a FastAPI server
+The application runs in AWS `ap-southeast-1`:
 
-[Video 4](https://youtu.be/IcbzksbMhuM): Containerising Backend and Frontend
+- An internet-facing Application Load Balancer sends traffic to the Streamlit
+  frontend on port 8501.
+- The frontend and backend run as separate ECS services on AWS Fargate.
+- Both services use private subnets and do not receive public IP addresses.
+- ECS Service Connect routes frontend requests from `api:8000` to the FastAPI
+  backend.
+- A NAT Gateway provides outbound access to OpenAI, Qdrant, Supabase, and other
+  external services.
+- AWS Secrets Manager injects backend credentials when ECS starts a task.
+- CloudWatch Logs receives application and Service Connect logs.
 
----
+For complete diagrams, networking details, IAM role explanations, and current
+limitations, see the
+[AWS deployment architecture](docs/aws-architecture.md).
 
+## CI/CD
 
-If you do need to run the code, this is how:
+Pushes to `main` run `.github/workflows/build.yaml`, which:
 
-- Clone the repository.
-- Run:
-```bash
-cp env.example .env
-```
+1. Authenticates to AWS through GitHub OIDC.
+2. Builds the frontend and backend container images.
+3. Pushes commit-tagged and `latest` images to Amazon ECR.
+4. Registers new ECS task-definition revisions.
 
-Edit `.env` and add your API keys:
+The workflow currently registers revisions but does not automatically update
+the running ECS services. Service deployment is still a manual step.
 
-```
-OPENAI_API_KEY=your_google_api_key
-GOOGLE_API_KEY=your_google_api_key
-GROQ_API_KEY=your_groq_api_key
-```
-Keep the remaining configuration as per ```.env.example```.
+## Deployed services
 
+- ECS cluster: `shopping-assistant-cluster`
+- Frontend service: `amazon-fe-service`
+- Backend service: `amazon-be-service`
+- Frontend task definition: `amazon-fe`
+- Backend task definition: `amazon-be`
+- Service discovery namespace: `amazon.local`
 
-#### To run the project, execute:
+## Bootcamp and local development
 
-```bash
-make run-docker-compose
-```
-
-Streamlit application: http://localhost:8501
-
-FastAPI documentation: http://localhost:8000/docs
-
-
-
-## Contact
-
-If you have any questions, feel free to contact me via chenhang90@gmail.com
-
-You can also find me on:
-
-- 🔗 [LinkedIn](https://www.linkedin.com/in/hangchen1)
+The original bootcamp prerequisites, YouTube videos, local environment setup,
+and Docker Compose instructions are preserved in
+[Bootcamp prerequisites and local development](docs/bootcamp-prerequisites.md).
