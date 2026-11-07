@@ -1,68 +1,58 @@
-# ai-engineering-bootcamp-prerequisites
+# AI shopping assistant
 
-Welcome to the prerequisites repository for the [End-to-End AI Engineering Bootcamp](https://maven.com/swirl-ai/end-to-end-ai-engineering)! This repository is dedicated to setting up your development environment and scafoling a simple project with a StreamLit UI frontend service decoupled from FastAPI server.
+Production deployment of a Streamlit shopping assistant backed by FastAPI,
+Qdrant, PostgreSQL, and LLM APIs.
 
-We strongly recomend you coding along the videos available in our YouTube channel rather than just cloning the repository and running the code.
+## Live deployment
 
----
-
-[Video 1](https://youtu.be/3WsEgLtwsGs): Setting up your development environment
-
-[Video 2](https://youtu.be/cGOGA7GFecI): Build and containerise your first chatbot
-
-[Video 3](https://youtu.be/bZHaCAFAUCs): Moving the agent behind a FastAPI server
-
-[Video 4](https://youtu.be/IcbzksbMhuM): Containerising Backend and Frontend
-
----
-
-
-If you do need to run the code, this is how:
-
-- Clone the repository.
-- Run:
-```bash
-cp env.example .env
-```
-
-Edit `.env` and add your API keys:
-
-```
-OPENAI_API_KEY=your_google_api_key
-GOOGLE_API_KEY=your_google_api_key
-GROQ_API_KEY=your_groq_api_key
-```
-Keep the remaining configuration as per ```.env.example```.
-
-
-#### To run the project, execute:
-
-```bash
-make run-docker-compose
-```
-
-Streamlit application: http://localhost:8501
-
-FastAPI documentation: http://localhost:8000/docs
-
-## Production deployment
-
-The production application runs on AWS ECS with Fargate. An Application Load
-Balancer exposes the Streamlit frontend, while ECS Service Connect routes
-frontend requests to the private FastAPI backend. GitHub Actions builds the
-container images, pushes them to Amazon ECR, and registers ECS task-definition
-revisions using AWS OIDC roles.
-
-Deployed frontend:
+Frontend:
 <http://shopping-assistant-fe-alb-1860229733.ap-southeast-1.elb.amazonaws.com/>
 
-See the [AWS deployment architecture](docs/aws-architecture.md) for diagrams,
-IAM role explanations, networking details, and deployment limitations.
+> The current load balancer endpoint uses HTTP. HTTPS is a recommended next
+> step before treating this as a public production service.
 
-## Contact
+## Production architecture
 
-If you have any questions, feel free to contact me via chenhang90@gmail.com
+The application runs in AWS `ap-southeast-1`:
 
-You can also find me on:
+- An internet-facing Application Load Balancer sends traffic to the Streamlit
+  frontend on port 8501.
+- The frontend and backend run as separate ECS services on AWS Fargate.
+- Both services use private subnets and do not receive public IP addresses.
+- ECS Service Connect routes frontend requests from `api:8000` to the FastAPI
+  backend.
+- A NAT Gateway provides outbound access to OpenAI, Qdrant, Supabase, and other
+  external services.
+- AWS Secrets Manager injects backend credentials when ECS starts a task.
+- CloudWatch Logs receives application and Service Connect logs.
 
-- 🔗 [LinkedIn](https://www.linkedin.com/in/hangchen1)
+For complete diagrams, networking details, IAM role explanations, and current
+limitations, see the
+[AWS deployment architecture](docs/aws-architecture.md).
+
+## CI/CD
+
+Pushes to `main` run `.github/workflows/build.yaml`, which:
+
+1. Authenticates to AWS through GitHub OIDC.
+2. Builds the frontend and backend container images.
+3. Pushes commit-tagged and `latest` images to Amazon ECR.
+4. Registers new ECS task-definition revisions.
+
+The workflow currently registers revisions but does not automatically update
+the running ECS services. Service deployment is still a manual step.
+
+## Deployed services
+
+- ECS cluster: `shopping-assistant-cluster`
+- Frontend service: `amazon-fe-service`
+- Backend service: `amazon-be-service`
+- Frontend task definition: `amazon-fe`
+- Backend task definition: `amazon-be`
+- Service discovery namespace: `amazon.local`
+
+## Bootcamp and local development
+
+The original bootcamp prerequisites, YouTube videos, local environment setup,
+and Docker Compose instructions are preserved in
+[Bootcamp prerequisites and local development](docs/ai-engineering-bootcamp-prerequisites.md).
