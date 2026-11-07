@@ -86,18 +86,21 @@ def retrieve_items_data(query, qdrant_client, k=5, hybrid=True):
     retrieved_context = []
     similarity_scores = []
     retrieved_context_ratings = []
+    retrieved_context_prices = []
 
     for result in results.points:
         retrieved_context_ids.append(result.payload["parent_asin"])
         retrieved_context.append(result.payload["description"])
         similarity_scores.append(result.score)
         retrieved_context_ratings.append(result.payload["average_rating"])
+        retrieved_context_prices.append(result.payload.get("price"))
 
     return {
         "retrieved_context_ids": retrieved_context_ids,
         "retrieved_context": retrieved_context,
         "similarity_scores": similarity_scores,
         "retrieved_context_ratings": retrieved_context_ratings,
+        "retrieved_context_prices": retrieved_context_prices,
     }
 
 
@@ -121,6 +124,9 @@ def rerank_data(query, context, top_k=5):
         "similarity_scores": [context["similarity_scores"][i] for i in order],
         "retrieved_context_ratings": [
             context["retrieved_context_ratings"][i] for i in order
+        ],
+        "retrieved_context_prices": [
+            context["retrieved_context_prices"][i] for i in order
         ],
     }
 
@@ -194,6 +200,9 @@ def rerank_data_openrouter(
         "retrieved_context_ratings": [
             context["retrieved_context_ratings"][i] for i in order
         ],
+        "retrieved_context_prices": [
+            context["retrieved_context_prices"][i] for i in order
+        ],
     }
 
 
@@ -202,12 +211,17 @@ def process_context(context):
 
     formatted_context = ""
 
-    for id, chunk, rating in zip(
+    for id, chunk, rating, price in zip(
         context["retrieved_context_ids"],
         context["retrieved_context"],
         context["retrieved_context_ratings"],
+        context["retrieved_context_prices"],
     ):
-        formatted_context += f"- ID: {id}, rating: {rating}, description: {chunk}\n"
+        formatted_price = f"{price} USD" if price is not None else "not available"
+        formatted_context += (
+            f"- ID: {id}, rating: {rating}, price: {formatted_price}, "
+            f"description: {chunk}\n"
+        )
 
     return formatted_context
 
@@ -236,7 +250,7 @@ def get_formatted_item_context(query: str, top_k: int = 5) -> str:
 
     Returns:
         A string of the top k available products, each prefixed with its ID and
-        average rating."""
+        average rating and price when available."""
 
     qdrant_client = get_qdrant_client()
 
