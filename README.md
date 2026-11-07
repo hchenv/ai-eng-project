@@ -28,7 +28,7 @@ The application runs in AWS `ap-southeast-1`:
 
 For complete diagrams, networking details, IAM role explanations, and current
 limitations, see the
-[AWS deployment architecture](docs/aws-architecture.md).
+[AWS deployment architecture](documentation/aws-architecture.md).
 
 ## CI/CD
 
@@ -55,4 +55,4 @@ the running ECS services. Service deployment is still a manual step.
 
 The original bootcamp prerequisites, YouTube videos, local environment setup,
 and Docker Compose instructions are preserved in
-[Bootcamp prerequisites and local development](docs/ai-engineering-bootcamp-prerequisites.md).
+[Bootcamp prerequisites and local development](documentation/ai-engineering-bootcamp-prerequisites.md).
