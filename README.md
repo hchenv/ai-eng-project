@@ -55,4 +55,4 @@ the running ECS services. Service deployment is still a manual step.
 
 The original bootcamp prerequisites, YouTube videos, local environment setup,
 and Docker Compose instructions are preserved in
-[Bootcamp prerequisites and local development](docs/bootcamp-prerequisites.md).
+[Bootcamp prerequisites and local development](docs/ai-engineering-bootcamp-prerequisites.md).
